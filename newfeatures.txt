@@ -1,0 +1,5 @@
+customers CRUD
+credit should include customer selection
+dashboard should display last 10 sales with view more button that navigates to sales history
+add a clear notification option to the dashboard so users can clear all notifications
+each notification should also have a close button so users can delete notifications after viewing
