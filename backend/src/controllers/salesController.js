@@ -111,7 +111,6 @@ const createSale = async (req, res) => {
             include: { product: true },
           },
           user: true,
-          customer: true,
         },
       });
     });
@@ -173,7 +172,9 @@ const getSales = async (req, res) => {
     let whereClause = {};
     let includeClause = {
       items: { include: { product: true } },
-      customer: true,
+      user: {
+        select: { id: true, name: true, email: true },
+      },
     };
 
     if (userRole === 'STAFF') {
