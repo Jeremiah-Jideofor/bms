@@ -4,7 +4,7 @@ const { createNotification } = require("../utils/alertService");
 // CREATE SALE (transactional)
 const createSale = async (req, res) => {
   try {
-    const { items, isCredit = false, dueDate, paymentMethod = 'CASH', customerId } = req.body;
+    const { items, isCredit = false, dueDate, paymentMethod = 'CASH' } = req.body;
 
     // Validate payment method
     const validPaymentMethods = ['CASH', 'TRANSFER', 'CARD'];
@@ -24,12 +24,6 @@ const createSale = async (req, res) => {
       return res
         .status(400)
         .json({ success: false, message: "Due date is required for credit sales" });
-    }
-
-    if (isCredit && !customerId) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Customer selection is required for credit sales" });
     }
 
     const sale = await prisma.$transaction(async (tx) => {
@@ -69,7 +63,7 @@ const createSale = async (req, res) => {
       }
 
       // Create sale
-      console.log("Creating sale...", { total, isCredit, dueDate, paymentMethod, customerId });
+      console.log("Creating sale...", { total, isCredit, dueDate, paymentMethod, userId: req.user.id });
       const newSale = await tx.sale.create({
         data: {
           total,
@@ -77,7 +71,6 @@ const createSale = async (req, res) => {
           dueDate: dueDate ? new Date(dueDate) : null,
           paymentMethod,
           userId: req.user.id,
-          customerId: customerId ? parseInt(customerId) : null,
         },
       });
 

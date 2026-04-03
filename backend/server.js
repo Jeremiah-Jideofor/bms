@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   try {
     // Verify database connection
-    await prisma.$queryRaw`SELECT 1`;
+    await prisma.$connect();
     console.log('✅ Database connection successful');
 
     app.listen(PORT, () => {
@@ -16,8 +16,9 @@ const startServer = async () => {
       console.log(`📱 Environment: ${process.env.NODE_ENV}`);
     });
   } catch (error) {
-    console.error('❌ Database connection failed:', error.message);
-    console.error('Ensure DATABASE_URL and DIRECT_URL are configured correctly in Render');
+    console.error('❌ Database connection failed:');
+    console.error('Error:', error.message);
+    console.error('\nEnsure DATABASE_URL and DIRECT_URL are configured correctly');
     process.exit(1);
   }
 };
