@@ -1,25 +1,10 @@
-datasource db {
-  provider = "postgresql"
-}
-
 generator client {
   provider = "prisma-client-js"
 }
 
-enum Role {
-  ADMIN
-  STAFF
-}
-
-enum PaymentMethod {
-  CASH
-  TRANSFER
-  CARD
-}
-
-enum MovementType {
-  IN
-  OUT
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -29,24 +14,22 @@ model User {
   password  String
   role      Role     @default(STAFF)
   createdAt DateTime @default(now())
-
   sales     Sale[]
 }
 
 model Product {
-  id          Int      @id @default(autoincrement())
-  name        String
-  sku         String   @unique
-  price       Float
-  cost        Float
-  quantity    Int      @default(0)
-  minStock    Int      @default(5)
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  stockMovements StockMovement[]
+  id             Int             @id @default(autoincrement())
+  name           String
+  price          Float
+  quantity       Int             @default(0)
+  createdAt      DateTime        @default(now())
+  cost           Float
+  description    String?
+  minStock       Int             @default(5)
+  sku            String          @unique
+  updatedAt      DateTime        @updatedAt
   saleItems      SaleItem[]
+  stockMovements StockMovement[]
 }
 
 model StockMovement {
@@ -55,33 +38,25 @@ model StockMovement {
   type      MovementType
   quantity  Int
   createdAt DateTime     @default(now())
-
   product   Product      @relation(fields: [productId], references: [id])
 }
 
 model Customer {
-  id        Int      @id @default(autoincrement())
-  name      String
-  phone     String?
-  email     String?  @unique
-  address   String?
-  createdAt DateTime @default(now())
-
-  sales     Sale[]
+  id    Int     @id @default(autoincrement())
+  name  String
+  phone String?
+  email String?
 }
 
 model Sale {
-  id            Int             @id @default(autoincrement())
+  id            Int           @id @default(autoincrement())
   total         Float
-  isCredit      Boolean         @default(false)
+  isCredit      Boolean       @default(false)
   dueDate       DateTime?
-  paymentMethod PaymentMethod   @default(CASH)
+  createdAt     DateTime      @default(now())
   userId        Int
-  customerId    Int?
-  createdAt     DateTime        @default(now())
-
-  user          User            @relation(fields: [userId], references: [id])
-  customer      Customer?       @relation(fields: [customerId], references: [id])
+  paymentMethod PaymentMethod @default(CASH)
+  user          User          @relation(fields: [userId], references: [id])
   items         SaleItem[]
 }
 
@@ -92,9 +67,8 @@ model SaleItem {
   quantity  Int
   price     Float
   subtotal  Float
-
-  sale      Sale    @relation(fields: [saleId], references: [id])
   product   Product @relation(fields: [productId], references: [id])
+  sale      Sale    @relation(fields: [saleId], references: [id])
 }
 
 model Notification {
@@ -118,4 +92,20 @@ model AuditLog {
   @@index([userId])
   @@index([action])
   @@index([createdAt])
+}
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  CARD
+}
+
+enum MovementType {
+  IN
+  OUT
 }
