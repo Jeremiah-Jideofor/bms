@@ -177,8 +177,8 @@ const getRecentSales = async (req, res) => {
         total: true,
         createdAt: true,
         isCredit: true,
+        paymentMethod: true,
         user: { select: { name: true } },
-        customer: { select: { name: true } },
       },
     });
 
