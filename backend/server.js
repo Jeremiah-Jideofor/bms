@@ -4,21 +4,16 @@ const prisma = require('./src/config/prisma');
 
 const PORT = process.env.PORT || 5000;
 
-// Test database connection on startup
+// Start server without connection check (will fail at first DB query if connection is bad)
 const startServer = async () => {
   try {
-    // Verify database connection
-    await prisma.$connect();
-    console.log('✅ Database connection successful');
-
     app.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);
       console.log(`📱 Environment: ${process.env.NODE_ENV}`);
+      console.log('🔄 Database connection will be tested on first request');
     });
   } catch (error) {
-    console.error('❌ Database connection failed:');
-    console.error('Error:', error.message);
-    console.error('\nEnsure DATABASE_URL and DIRECT_URL are configured correctly');
+    console.error('❌ Server startup failed:', error.message);
     process.exit(1);
   }
 };
