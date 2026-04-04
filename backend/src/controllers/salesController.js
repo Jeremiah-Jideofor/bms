@@ -2,6 +2,7 @@ const prisma = require("../config/prisma");
 const { createNotification } = require("../utils/alertService");
 
 // CREATE SALE (transactional)
+// CREATE SALE (transactional) - OPTIMIZED FOR SUPABASE
 const createSale = async (req, res) => {
   try {
     const { items, isCredit = false, dueDate, paymentMethod = 'CASH' } = req.body;
@@ -26,108 +27,116 @@ const createSale = async (req, res) => {
         .json({ success: false, message: "Due date is required for credit sales" });
     }
 
-    const sale = await prisma.$transaction(async (tx) => {
-      let total = 0;
-      const resolvedItems = [];
-
-      // Validate products
-      for (const item of items) {
-        const { productId, quantity } = item;
-
-        if (!productId || !quantity || quantity <= 0) {
-          throw new Error("Each item must have a valid productId and quantity");
-        }
-
-        const product = await tx.product.findUnique({
-          where: { id: parseInt(productId) },
-        });
-
-        if (!product) {
-          throw new Error(`Product with ID ${productId} not found`);
-        }
-
-        if (product.quantity < quantity) {
-          throw new Error(
-            `Insufficient stock for "${product.name}". Available: ${product.quantity}`
-          );
-        }
-
-        const subtotal = product.price * quantity;
-        total += subtotal;
-
-        resolvedItems.push({
-          product,
-          quantity,
-          subtotal,
-        });
-      }
-
-      // Create sale
-      console.log("Creating sale...", { total, isCredit, dueDate, paymentMethod, userId: req.user.id });
-      const newSale = await tx.sale.create({
-        data: {
-          total,
-          isCredit,
-          dueDate: dueDate ? new Date(dueDate) : null,
-          paymentMethod,
-          userId: req.user.id,
-        },
-      });
-
-      // Create sale items + update stock
-      console.log("Creating sale items...");
-      console.log("Resolved items:", resolvedItems);
-      for (const { product, quantity, subtotal } of resolvedItems) {
-        await tx.saleItem.create({
-          data: {
-            saleId: newSale.id,
-            productId: product.id,
-            quantity,
-            price: product.price,
-            subtotal,
-          },
-        });
-
-        await tx.product.update({
-          where: { id: product.id },
-          data: {
-            quantity: { decrement: quantity },
-          },
-        });
-
-        await tx.stockMovement.create({
-          data: {
-            productId: product.id,
-            type: "OUT",
-            quantity,
-          },
-        });
-      }
-
-      return await tx.sale.findUnique({
-        where: { id: newSale.id },
-        include: {
-          items: {
-            include: { product: true },
-          },
-          user: true,
-        },
-      });
+    // === STEP 1: Fetch ALL products in ONE query (OUTSIDE transaction) ===
+    const productIds = items.map(item => parseInt(item.productId));
+    const products = await prisma.product.findMany({
+      where: { id: { in: productIds } },
     });
 
-    // create alerts (fire-and-forget)
+    const productsMap = new Map(products.map(p => [p.id, p]));
+
+    // === STEP 2: Validate stock & calculate total (still outside tx) ===
+    let total = 0;
+    const saleItemsData = [];
+
+    for (const item of items) {
+      const productId = parseInt(item.productId);
+      const quantity = Number(item.quantity);
+
+      if (!productId || !quantity || quantity <= 0) {
+        throw new Error("Each item must have a valid productId and quantity > 0");
+      }
+
+      const product = productsMap.get(productId);
+      if (!product) {
+        throw new Error(`Product with ID ${productId} not found`);
+      }
+
+      if (product.quantity < quantity) {
+        throw new Error(
+          `Insufficient stock for "${product.name}". Available: ${product.quantity}, Requested: ${quantity}`
+        );
+      }
+
+      const subtotal = product.price * quantity;
+      total += subtotal;
+
+      saleItemsData.push({
+        productId: product.id,
+        quantity,
+        price: product.price,
+        subtotal,
+      });
+    }
+
+    // === STEP 3: Run writes in a single transaction (much smaller now) ===
+    const sale = await prisma.$transaction(
+      async (tx) => {
+        // Create the sale record
+        const newSale = await tx.sale.create({
+          data: {
+            total,
+            isCredit,
+            dueDate: dueDate ? new Date(dueDate) : null,
+            paymentMethod,
+            userId: req.user.id,
+          },
+        });
+
+        // Create all sale items in ONE query (createMany)
+        await tx.saleItem.createMany({
+          data: saleItemsData.map(item => ({
+            saleId: newSale.id,
+            productId: item.productId,
+            quantity: item.quantity,
+            price: item.price,
+            subtotal: item.subtotal,
+          })),
+        });
+
+        // Update stock + create stock movements
+        for (const item of saleItemsData) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { quantity: { decrement: item.quantity } },
+          });
+
+          await tx.stockMovement.create({
+            data: {
+              productId: item.productId,
+              type: "OUT",
+              quantity: item.quantity,
+            },
+          });
+        }
+
+        // Return fully populated sale
+        return await tx.sale.findUnique({
+          where: { id: newSale.id },
+          include: {
+            items: {
+              include: { product: true },
+            },
+            user: true,
+          },
+        });
+      },
+      { timeout: 25000 } // 25 seconds - safe for Supabase
+    );
+
+    // Post-sale alerts (fire-and-forget)
     _postSaleAlerts(sale);
 
-    // Log the sale creation
+    // Audit log
     const { logAction } = require('../utils/auditLogger');
     await logAction(req.user.id, 'CREATE', 'SALE', sale.id, 'SUCCESS', `Created ${paymentMethod} sale worth ₦${sale.total}${isCredit ? ' (Credit)' : ''}`);
 
     res.json({ success: true, data: sale });
   } catch (error) {
-    // Log failed sale creation
     const { logAction } = require('../utils/auditLogger');
     await logAction(req.user?.id, 'CREATE', 'SALE', null, 'FAILED', error.message);
 
+    console.error("Sale creation error:", error);
     res.status(400).json({ success: false, message: error.message });
   }
 };

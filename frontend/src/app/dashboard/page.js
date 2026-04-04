@@ -234,16 +234,20 @@ export default function Dashboard() {
             <Alert variant="destructive" className="mb-8">{error}</Alert>
           )}
 
-          {/* KPI CARDS */}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-
-            <DashboardCard
-              title="Total Products"
-              value={data.totalProducts}
-              iconBg="bg-indigo-100"
-              icon={<FiBox size={22} className="text-indigo-600" />}
-            />
+          {!data ? (
+            <Alert variant="destructive" className="mb-8">
+              Unable to load dashboard data. Please check your backend connection.
+            </Alert>
+          ) : (
+            <>
+              {/* KPI CARDS */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                <DashboardCard
+                  title="Total Products"
+                  value={data.totalProducts}
+                  iconBg="bg-indigo-100"
+                  icon={<FiBox size={22} className="text-indigo-600" />}
+                />
 
             <DashboardCard
               title="Sales Today"
@@ -306,10 +310,10 @@ export default function Dashboard() {
                     <tr className="border-b border-gray-200 bg-gray-50">
                       <th className="text-left px-4 py-3 text-sm font-semibold text-gray-700">Date</th>
                       <th className="text-left px-4 py-3 text-sm font-semibold text-gray-700">Amount</th>
-                      <th className="text-left px-4 py-3 text-sm font-semibold text-gray-700">Customer</th>
                       {isAdmin && (
                         <th className="text-left px-4 py-3 text-sm font-semibold text-gray-700">Staff</th>
                       )}
+                      <th className="text-left px-4 py-3 text-sm font-semibold text-gray-700">Payment</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -332,14 +336,14 @@ export default function Dashboard() {
                             {sale.isCredit ? 'Credit' : 'Cash'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-800">
-                          {sale.customer?.name || <span className="text-gray-400 italic">Walk-in</span>}
-                        </td>
                         {isAdmin && (
                           <td className="px-4 py-3 text-sm text-gray-800">
                             {sale.user?.name || 'Unknown'}
                           </td>
                         )}
+                        <td className="px-4 py-3 text-sm text-gray-800">
+                          {sale.paymentMethod || 'CASH'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -348,6 +352,8 @@ export default function Dashboard() {
             )}
 
           </div>
+            </>
+          )}
 
           {/* NOTIFICATIONS */}
 
